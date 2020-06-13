@@ -1,0 +1,591 @@
+---
+title: "YouGov Blue Presentation"
+author: "Cara Feldkamp"
+date: "April 27, 2019"
+output: html_document
+---
+
+```{r}
+library(stats)
+library(dplyr)
+library(ggplot2)
+library(HH)
+library(survey)
+```
+
+```{r}
+survey <- read.csv("/Applications/DbVisualizer-8.0.12.app/Contents/Imports/Moss_checkin.csv")
+```
+
+```{r}
+survey$horserace_recoded <- 0
+survey[survey$horserace==1,]$horserace_recoded <- 1 #Def Donna
+survey[survey$horserace==3,]$horserace_recoded <- 2 #Lean Donna
+survey[survey$horserace==5,]$horserace_recoded <- 3 #Undecided
+survey[survey$horserace==4,]$horserace_recoded <- 4 #Lean Jack
+survey[survey$horserace==2,]$horserace_recoded <- 5 #Def Jack
+
+followup <- svydesign(ids = ~id,
+                      data = survey,
+                      weights = ~weight)
+
+svymean(~horserace_recoded, design = followup)
+
+summary(followup)
+
+
+svyglm(horserace_recoded ~ sex + education + race_all, design=followup)
+
+
+horserace_by_gender <- svyby(~horserace_recoded, ~sex,design = followup, FUN = svymean, keep.names=FALSE)
+
+knitr::kable(horserace_by_gender, digits = 2)
+
+svyquantile(x=horserace,design=followup,quantiles=c(.01,.25,.5,.75.99))
+
+svytable(~sex + education + pid,design=followup)
+
+svytable(~sex + race_all,design=followup)
+
+sex_pid <- svytable(~sex + pid,design=followup)
+sex_pid <- as.data.frame(sex_pid)
+svyby(~horserace_recoded, ~sex,design = followup, FUN = svymean,
+
+ggplot(data=sex_pid, aes(x=as.character(pid),y=Freq,fill=sex)) + geom_col() + scale_x_discrete(labels=c("1" = "Strong Dem", "2" = "Weak Dem","3" = "Lean Dem","4"="Ind","5"="Lean Rep","6"="Weak Rep","7"="Strong Rep")) + labs(x="Party ID", y="Freq (Weighted)",fill="Gender") + theme_minimal()
+```
+
+```{r}
+#Calculating the std error and margin of error for subgroups
+pid_sums <- survey %>% group_by(pid) %>% summarize(n=sum(weight)) %>% data.frame()
+pid_horserace_sums <- survey %>% group_by(pid,horserace_recoded) %>% summarize(k=sum(weight)) %>% data.frame()
+horserace_by_party_stat <- left_join(pid_horserace_sums,pid_sums,by="pid")
+horserace_by_party_stat$prop <- horserace_by_party_stat$k/horserace_by_party_stat$n
+horserace_by_party_stat$se <- sqrt(horserace_by_party_stat$prop*(1-horserace_by_party_stat$prop)/horserace_by_party_stat$n)
+horserace_by_party_stat$moe <- (qnorm(.975)*horserace_by_party_stat$se)*horserace_by_party_stat$n
+
+horserace_by_party <- svytable(~horserace_recoded + pid,design=followup)
+horserace_by_party <- as.data.frame(horserace_by_party)
+
+ggplot(data=horserace_by_party,aes(x=reorder(as.character(pid), desc(as.character(pid))),y=Freq, fill=horserace_recoded, label=round(Freq)))+ geom_col(position="fill") + scale_x_discrete(labels=c("7"="Strong Rep", "6"="Not Very Strong Rep", "5"="Lean Rep", "4"="Ind", "3" = "Lean Dem", "2" = "Not Very Strong Dem", "1" = "Strong Dem")) + labs(x="Party ID", y="Proportion (Weighted)",fill="Intended Vote Choice") + theme_minimal() + scale_fill_manual(labels=c("Donna Moss","Lean Donna Moss","Undecided","Lean Jack Reese","Jack Reese"),values=c("dodgerblue3","light blue","light grey","pink","firebrick2")) + geom_text(position = position_fill(vjust=0.5),color="white",size=3) + coord_flip()
+
+```
+
+```{r}
+
+#Calculating the margin of error
+ideo_sums <- survey %>% group_by(ideo) %>% summarize(n=sum(weight)) %>% data.frame()
+ideo_horserace_sums <- survey %>% group_by(ideo,horserace_recoded) %>% summarize(k=sum(weight)) %>% data.frame()
+horserace_by_ideo_stats <- left_join(ideo_horserace_sums,ideo_sums,by="ideo")
+horserace_by_ideo_stats$prop <- horserace_by_ideo_stats$k/horserace_by_ideo_stats$n
+horserace_by_ideo_stats$se <- sqrt(horserace_by_ideo_stats$prop*(1-horserace_by_ideo_stats$prop)/horserace_by_ideo_stats$n)
+horserace_by_ideo_stats$moe <- (qnorm(.975)*horserace_by_ideo_stats$se)*horserace_by_ideo_stats$n
+
+horserace_by_ideo <- svytable(~horserace_recoded + ideo,design=followup)
+horserace_by_ideo <- as.data.frame(horserace_by_ideo)
+
+g <- ggplot(data=horserace_by_ideo,aes(x=ideo,y=Freq, fill=horserace_recoded, label=round(Freq)))+ geom_col(position="fill")  + labs(x="Ideology", y="Proportion (Weighted)",fill="Intended Vote Choice") + theme_minimal() + scale_fill_manual(labels=c("Donna Moss","Lean Donna Moss","Undecided","Lean Jack Reese","Jack Reese"),values=c("dodgerblue3","light blue","light grey","pink","firebrick2")) + geom_text(position = position_fill(vjust=0.5),color="white",size=3) + coord_flip()
++ scale_x_discrete(labels=c("5" = "Very Liberal", "4" = "Somewhat Liberal","3" = "Moderate","2"="Somewhat Conservative","1"="Very Conservative")) + coord_flip()
+
+plot(g)
+```
+
+
+```{r}
+
+#Calculating the margin of error
+turnout_sums <- survey %>% group_by(turnout) %>% summarize(n=sum(weight)) %>% data.frame()
+turnout_horserace_sums <- survey %>% group_by(turnout,horserace_recoded) %>% summarize(k=sum(weight)) %>% data.frame()
+horserace_by_turnout_stats <- left_join(turnout_horserace_sums,turnout_sums,by="turnout")
+horserace_by_turnout_stats$prop <- horserace_by_turnout_stats$k/horserace_by_turnout_stats$n
+horserace_by_turnout_stats$se <- sqrt(horserace_by_turnout_stats$prop*(1-horserace_by_turnout_stats$prop)/horserace_by_turnout_stats$n)
+horserace_by_turnout_stats$moe <- (qnorm(.975)*horserace_by_turnout_stats$se)*horserace_by_turnout_stats$n
+
+
+horserace_by_turnout <- svytable(~horserace_recoded + turnout,design=followup)
+horserace_by_turnout <- as.data.frame(horserace_by_turnout)
+
+ggplot(data=horserace_by_turnout,aes(x=reorder(as.character(turnout),desc(as.character(turnout))),y=Freq, fill=horserace_recoded, label=round(Freq)))+ geom_col(position="fill") + scale_x_discrete(labels=c("1" = "Definitely Vote", "2" = "Probably Vote","3" = "50/50 Chance","4"="Probably Not Vote","5"="Definitely Not Vote")) + labs(x="Intention to Vote", y="Proportion (Weighted)",fill="Intended Vote Choice") + theme_minimal() + scale_fill_manual(labels=c("Donna Moss","Lean Donna Moss","Undecided","Lean Jack Reese","Jack Reese"),values=c("dodgerblue3","light blue","light grey","pink","firebrick2")) + geom_text(position = position_fill(vjust=0.5),color="white",size=3) + coord_flip()
+
+```
+
+```{r}
+pid_ideo <- svytable(~ideo + pid,design=followup)
+pid_ideo <- as.data.frame(pid_ideo)
+
+ggplot(data=pid_ideo,aes(x=as.character(ideo),y=reorder(as.character(pid),desc(as.character(pid))), fill=Freq, label=round(Freq))) + geom_raster() + scale_x_discrete(labels=c("5" = "Very Liberal", "4" = "Somewhat Liberal","3" = "Moderate","2"="Somewhat Conservative","1"="Very Conservative")) + scale_y_discrete(labels=c("1" = "Strong Dem", "2" = "Not Very Strong Dem","3" = "Lean Dem","4"="Ind","5"="Lean Rep","6"="Not Very Strong Rep","7"="Strong Rep")) + scale_fill_distiller(palette="Greens", direction=1) + geom_text(data=pid_ideo,aes(x=as.character(ideo),y=reorder(as.character(pid),desc(as.character(pid)),label=round(Freq)))) + labs(x="Ideology", y="Party ID",fill="Freq (Weighted)") + theme_minimal()
+
+
+hr_ideo <- svytable(~ideo + horserace_recoded + repeal_ACA,design=followup)
+hr_ideo <- as.data.frame(hr_ideo)
+
+hr_ideo$aca2 <- c('Oppose')
+hr_ideo[hr_ideo$repeal_ACA==2,]$aca2 <- c('Favor')
+
+ggplot(data=hr_ideo,aes(x=reorder(as.character(ideo),desc(as.character(ideo))),y=reorder(as.character(horserace_recoded),desc(as.character(horserace_recoded))), fill=Freq, label=round(Freq))) + geom_raster() + scale_x_discrete(labels=c("5" = "Very Liberal", "4" = "Somewhat Liberal","3" = "Moderate","2"="Somewhat Conservative","1"="Very Conservative")) + scale_y_discrete(labels=c("1" = "Donna", "2" = "Lean Donna","3" = "Undecided","4"="Lean Jack","5"="Jack")) + scale_fill_distiller(palette="PuBu", direction=1) + labs(x="Ideology", y="Vote Choice",fill="Respondents")  + theme_minimal() + facet_wrap(facets=as.factor(hr_ideo$aca2)) #+ geom_text(data=hr_ideo,aes(x=reorder(as.character(ideo),desc(as.character(ideo))),y=reorder(as.character(horserace_recoded),desc(as.character(horserace_recoded))), fill=Freq, label=round(Freq)))
+```
+
+
+```{r}
+#Investigating whether there are more moderates who identify as Dems than GOP
+strong_dem_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==1,]$Freq
+weak_dem_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==2,]$Freq
+lean_dem_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==3,]$Freq
+
+lean_rep_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==5,]$Freq
+weak_rep_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==6,]$Freq
+strong_rep_mod <- pid_ideo[pid_ideo$ideo==3 & pid_ideo$pid==7,]$Freq
+
+pid_summ <- svytotal(x=~as.character(pid),design=followup)
+pid_summ <- as.data.frame(pid_summ)
+pid_se <- pid_summ$SE
+
+
+#Calculating the margin of error
+pid_ideo_sums <- survey %>% group_by(pid,ideo) %>% summarize(k=sum(weight)) %>% data.frame()
+ideo_by_pid_stats <- left_join(pid_ideo_sums,ideo_sums,by="ideo")
+ideo_by_pid_stats$prop <- ideo_by_pid_stats$k/ideo_by_pid_stats$n
+ideo_by_pid_stats$se <- sqrt(ideo_by_pid_stats$prop*(1-ideo_by_pid_stats$prop)/ideo_by_pid_stats$n)
+ideo_by_pid_stats$moe <- (qnorm(.975)*ideo_by_pid_stats$se)*ideo_by_pid_stats$n
+
+
+dems_mod <- (strong_dem_mod - ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==1,]$moe) + (weak_dem_mod - ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==2,]$moe) + (lean_dem_mod - ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==3,]$moe)
+
+gop_mod <- (strong_rep_mod + ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==7,]$moe) + (weak_rep_mod + ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==6,]$moe) + (lean_rep_mod + ideo_by_pid_stats[ideo_by_pid_stats$ideo==3 & ideo_by_pid_stats$pid==5,]$moe)
+
+mods_diff <- dems_mod - gop_mod
+all_mods <- sum(survey[survey$ideo==3,]$weight)
+pct_mods_dem <- (mods_diff/all_mods)*100
+pct_mods_dem
+
+```
+
+```{r}
+horserace_by_race <- svytable(~horserace_recoded + race_all,design=followup)
+horserace_by_race <- as.data.frame(horserace_by_race)
+
+
+horserace_by_race_stats <- svyby(~horserace_recoded, ~race_all ,design = followup, FUN = svymean, keep.names=FALSE)
+
+race_summ <- svytotal(x=~race_all,design=followup)
+race_summ <- as.data.frame(race_summ)
+race_summ$race <- c("White","Black","Hispanic","Asian","Native American","Mixed","Other","Middle Eastern")
+
+race_se <- race_summ$SE
+
+race_graph_wt <- survey %>% group_by(race_all) %>% summarize(resp=sum(weight))
+race_graph_wt$wt <- "Weighted"
+race_graph_uw <- survey %>% group_by(race_all) %>% summarize(resp=n())
+race_graph_uw$wt <- "Unweighted"
+race_graph <- merge(race_graph_wt,race_graph_uw, by=c("race_all","resp","wt"),all=TRUE)
+
+ggplot(data=race_graph, aes(x=race_all, y=resp, fill=wt,label=round(resp,2))) + geom_col(position="dodge") + scale_x_discrete(labels=c("White","Black","Hispanic","Asian","Native American","Mixed","Other","Middle Eastern")) + geom_errorbar(data=filter(race_graph,wt=='Weighted'), aes(x=race_all, ymin=resp-race_se, ymax=resp+race_se),width=0.4) + labs(x="Race",y="Respondents",fill="") + theme_minimal() + theme(legend.position="top") 
+
+```
+
+```{r}
+gender_summ <- svytotal(x=~sex,design=followup)
+gender_summ <- as.data.frame(gender_summ)
+gender_se <- gender_summ$SE
+gender_moe <- 1.96*gender_se
+
+gender_graph_wt <- survey %>% group_by(sex) %>% summarize(resp=sum(weight))
+gender_graph_wt$wt <- "Weighted"
+gender_graph_uw <- survey %>% group_by(sex) %>% summarize(resp=n())
+gender_graph_uw$wt <- "Unweighted"
+gender_graph <- merge(gender_graph_wt,gender_graph_uw, by=c("sex","resp","wt"),all=TRUE)
+
+
+ggplot() + geom_col(data=gender_graph,aes(x=sex, y=resp, fill=wt),position="dodge", width=0.3) + scale_x_discrete(labels=c("Female","Male")) + scale_y_continuous(breaks=c(0,100,200,300,400,500,600)) + labs(x="Gender",y="Respondents",fill="") + theme_minimal() + theme(legend.position="top") + geom_errorbar(data=filter(gender_graph,wt=='Weighted'),aes(x=sex, ymin=resp-gender_se, ymax=resp+gender_se, fill=wt), width=0.2, position="dodge") + labs(x="Gender",y="Respondents",fill="") 
+
+minfem <- min(gender_graph[gender_graph$sex=="Female",]$resp)
+minmale <- min(gender_graph[gender_graph$sex=="Male",]$resp)
+maxfem <- max(gender_graph[gender_graph$sex=="Female",]$resp)
+maxmale <- max(gender_graph[gender_graph$sex=="Male",]$resp)
+
+gender_graph$minresp <- 0
+gender_graph[gender_graph$sex=="Female",]$minresp <- minfem
+gender_graph[gender_graph$sex=="Male",]$minresp <- minmale
+
+gender_graph$maxresp <- 0
+gender_graph[gender_graph$sex=="Female",]$maxresp <- maxfem
+gender_graph[gender_graph$sex=="Male",]$maxresp <- maxmale
+
+gender_graph[gender_graph$wt=="Weighted",]$resp1 <- NA
+gender_graph$resp2 <- gender_graph[gender_graph$wt=="Weighted",]$resp
+gender_graph[gender_graph$wt=="Unweighted",]$resp2 <- NA
+
+test <- data.frame(t(gender_graph))
+
+ggplot() + geom_point(data=gender_graph,aes(x=sex, y=resp, color=wt), size=4, position="dodge") + geom_segment(data=gender_graph,aes(x=sex, xend=sex,y=minresp,yend=maxresp), color="grey") + scale_x_discrete(labels=c("Female","Male")) + scale_y_continuous(limits=c(0,600)),labels=c("0","100","200","300","400","500","600")) + geom_errorbar(data=filter(gender_graph,wt=='Weighted'),aes(x=sex, ymin=resp-gender_se, ymax=resp+gender_se), width=0.2,position="dodge") + labs(x="Gender",y="Respondents",fill="") + theme_minimal() + theme(legend.position="top")
+```
+
+```{r}
+edu_summ <- svytotal(x=~education,design=followup)
+edu_summ <- as.data.frame(edu_summ)
+edu_se <- edu_summ$SE
+
+edu_graph_wt <- survey %>% group_by(education) %>% summarize(resp=sum(weight))
+edu_graph_wt$wt <- "Weighted"
+edu_graph_uw <- survey %>% group_by(education) %>% summarize(resp=n())
+edu_graph_uw$wt <- "Unweighted"
+edu_graph <- merge(edu_graph_wt,edu_graph_uw, by=c("education","resp","wt"),all=TRUE)
+
+ggplot() + geom_col(data=edu_graph, aes(x=education, y=resp, fill=wt),position="dodge", width=0.8) + scale_x_discrete(labels=c("No HS","HS Grad","Some College","2-Yr College","4-Yr College","Post-Grad")) + scale_y_continuous(breaks=c(0,100,200,300,400,500,600)) + geom_errorbar(data=filter(edu_graph,wt=='Weighted'), aes(x=education, ymin=resp-edu_se, ymax=resp+edu_se),width=0.2) + labs(x="Education",y="Respondents",fill="") + theme_minimal() + theme(legend.position="top")
+
+```
+
+```{r}
+pid_summ <- svytotal(x=~as.character(pid),design=followup)
+pid_summ <- as.data.frame(pid_summ)
+pid_se <- pid_summ$SE
+
+knitr::kable(pid_summ)
+
+pid_graph_wt <- survey %>% group_by(pid) %>% summarize(resp=sum(weight))
+pid_graph_wt$wt <- "Weighted"
+pid_graph_uw <- survey %>% group_by(pid) %>% summarize(resp=n())
+pid_graph_uw$wt <- "Unweighted"
+pid_graph <- merge(pid_graph_wt,pid_graph_uw, by=c("pid","resp","wt"),all=TRUE)
+
+ggplot() + geom_col(data=pid_graph, aes(x=as.character(pid), y=resp, fill=wt),position="dodge", width=0.8) + scale_x_discrete(labels=c("Strong Dem","Not Very Strong Dem","Lean Dem","Independent","Lean Rep","Not Very Strong Rep","Strong Rep")) + scale_y_continuous(breaks=c(0,50,100,150,200,250,300,350,400)) + geom_errorbar(data=filter(pid_graph,wt=='Weighted'), aes(x=as.character(pid), ymin=resp-pid_se, ymax=resp+pid_se),width=0.2) + labs(x="Party ID",y="Respondents",fill="") + theme_minimal() + theme(legend.position="top")
+```
+
+```{r}
+gender_ed_graph <- svytable(~sex + education + horserace_recoded ,design=followup)
+gender_ed_graph <- as.data.frame(gender_ed_graph)
+#race_ed_graph <- subset(race_ed_graph,race_all %in% c("b_Black","c_Hispanic","d_Asian"))
+
+#race_low_ed <- subset(survey, race_all %in% c("a_White","b_Black","c_Hispanic","d_Asian") & education %in% c("a_No_HS","b_HS_grad","c_Some_coll"))
+
+ggplot(data=gender_ed_graph,aes(x=as.character(education),y=as.character(horserace_recoded), fill=Freq)) + geom_raster() + facet_wrap(facets=gender_ed_graph$sex) + scale_x_discrete(labels=c("No HS","HS Grad","Some College","2-Yr College","4-Yr College","Post-Grad")) + scale_y_discrete(labels=c("1" = "Donna", "2" = "Lean Donna","3" = "Undecided","4"="Lean Jack","5"="Jack")) + scale_fill_distiller(palette="Oranges", direction=1) + labs(x="Education", y="Vote Intent",fill="Freq (Weighted)") + theme_minimal() + coord_flip()
+
+```
+
+```{r}
+###Turnout
+turnout_raw <- survey %>% group_by(turnout) %>% summarize(total = sum(weight)) %>% data.frame()
+turnout_raw <- add_row(turnout_raw, turnout=5, total=0)
+turnout_raw$all <- sum(turnout_raw$total)
+turnout_raw$pct <- (turnout_raw$total/turnout_raw$all)*100
+
+ggplot(data=turnout_raw) + geom_col(aes(x=reorder(as.character(turnout),desc(as.character(turnout))),y=pct), fill="dodgerblue",color="white") + labs(title="Turnout",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("1"="Definitely Will Vote", "2"="Probably Will Vote","3"="50/50 Chance of Voting","4"="Probably Not Voting","5"="Definitely Not Voting")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100)) + geom_text(aes(x=reorder(as.character(turnout),desc(as.character(turnout))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-0.1,size=3.8) + coord_flip() 
+
+ggplot(data=turnout_raw) + geom_point(aes(x=turnout,y=pct),color="dodgerblue", size=4) + geom_segment(aes(x=turnout, xend=turnout, y=0,yend=pct),color="darkslategrey") + labs(title="Turnout",x="",y="") + theme_minimal()  + scale_x_reverse(labels=c("Definitely Will Vote","Probably Will Vote","50/50 Chance of Voting","Probably Not Voting","Definitely Not Voting")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100)) + geom_text(aes(x=turnout,y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-0.3,size=3.8) + coord_flip() 
+```
+
+```{r}
+###Horserace
+hr_raw <- survey %>% group_by(horserace_recoded) %>% summarize(total = sum(weight)) %>% data.frame()
+hr_raw$all <- sum(hr_raw$total)
+hr_raw$pct <- (hr_raw$total/hr_raw$all)*100
+
+ggplot(data=hr_raw) + geom_col(aes(x=reorder(as.character(horserace_recoded),desc(as.character(horserace_recoded))),y=pct), fill="mediumseagreen",color="white") + labs(title="Candidate Support",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("1"="Democrat Donna Moss", "2"="Lean Democrat Donna Moss","3"="Undecided","4"="Lean Republican Jack Reese","5"="Republican Jack Reese")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100))+ geom_text(aes(x=reorder(as.character(horserace_recoded),desc(as.character(horserace_recoded))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-.1,size=3.8) + coord_flip()
+```
+
+```{r}
+aca_raw <- survey %>% group_by(repeal_ACA) %>% summarize(total = sum(weight)) %>% data.frame()
+aca_raw$all <- sum(aca_raw$total)
+aca_raw$pct <- (aca_raw$total/aca_raw$all)*100
+
+ggplot(data=aca_raw) + geom_col(aes(x=reorder(as.character(repeal_ACA),desc(as.character(repeal_ACA))),y=pct), fill="deeppink4",color="white", width=0.5) + labs(title="Repealing the ACA",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("1"="Oppose Repeal", "2"="Favor Repeal")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100))+geom_text(aes(x=reorder(as.character(repeal_ACA),desc(as.character(repeal_ACA))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-.1,size=3.8) +coord_flip()
+```
+
+```{r}
+##Trump Approval
+trump_raw <- survey %>% group_by(trump_approval) %>% summarize(total = sum(weight)) %>% data.frame()
+trump_raw$all <- sum(trump_raw$total)
+trump_raw$pct <- (trump_raw$total/trump_raw$all)*100
+
+ggplot(data=trump_raw) + geom_col(aes(x=reorder(as.character(trump_approval),desc(as.character(trump_approval))),y=pct), fill="darkorange",color="white", width=0.8) + labs(title="Trump Approval",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("5"="Strongly Disapprove", "4"="Somewhat Disapprove","3"="Not Sure","2"="Somewhat Approve","1"="Strongly Approve")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100))+geom_text(aes(x=reorder(as.character(trump_approval),desc(as.character(trump_approval))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-.1,size=3.8) +coord_flip()
+```
+
+```{r}
+##Party ID
+pid_raw <- survey %>% group_by(pid) %>% summarize(total = sum(weight)) %>% data.frame()
+pid_raw$all <- sum(pid_raw$total)
+pid_raw$pct <- (pid_raw$total/pid_raw$all)*100
+
+ggplot(data=pid_raw) + geom_col(aes(x=reorder(as.character(pid),desc(as.character(pid))),y=pct), fill="darkblue",color="white", width=0.8) + labs(title="Party ID",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("7"="Strong Republican","6"="Not Very Strong Republican","5"="Lean Republican", "4"="Independent","3"="Lean Democrat","2"="Not Very Strong Democrat","1"="Strong Democrat")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100))+geom_text(aes(x=reorder(as.character(pid),desc(as.character(pid))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-.1,size=3.8) +coord_flip()
+```
+
+```{r}
+##Ideology
+ideo_raw <- survey %>% group_by(ideo) %>% summarize(total = sum(weight)) %>% data.frame()
+ideo_raw$all <- sum(ideo_raw$total)
+ideo_raw$pct <- (ideo_raw$total/ideo_raw$all)*100
+
+ggplot(data=ideo_raw) + geom_col(aes(x=reorder(as.character(ideo),desc(as.character(ideo))),y=pct), fill="gold",color="white", width=0.8) + labs(title="Ideology",x="",y="") + theme_minimal() + scale_x_discrete(labels=c("5"="Very Liberal", "4"="Somewhat Liberal","3"="Moderate","2"="Somewhat Conservative","1"="Very Conservative")) + scale_y_continuous(labels=c("0%","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"), breaks=c(0,10,20,30,40,50,60,70,80,90,100))+geom_text(aes(x=reorder(as.character(ideo),desc(as.character(ideo))),y=pct,label=paste(round(pct),"%",sep="")),color="black",hjust=-.1,size=3.8) +coord_flip()
+```
+
+
+```{r}
+
+turnout_summ <- svytable(~turnout,design=followup)
+turnout_summ <- as.data.frame(turnout_summ)
+turnout_se <- turnout_summ$SE
+
+
+##Turnout question
+turnout <- survey %>% select(turnout, weight) %>% group_by(turnout) %>% summarize(weighted = sum(weight)) %>% data.frame()
+
+turnout$percent <- turnout$weighted/sum(turnout$weighted)
+
+##Horserace question
+horserace <- survey %>% select(horserace, weight) %>% group_by(horserace) %>% summarize(weighted = sum(weight)) %>% data.frame()
+
+horserace$percent <- horserace$weighted/sum(horserace$weighted)
+
+#Repeal ACA question
+aca <- survey %>% select(repeal_ACA, weight) %>% group_by(repeal_ACA) %>% summarize(weighted = sum(weight)) %>% data.frame()
+
+aca$percent <- aca$weighted/sum(aca$weighted)
+
+#Trump approval question
+trump_approval <- survey %>% select(trump_approval, weight) %>% group_by(trump_approval) %>% summarize(weighted = sum(weight)) %>% data.frame()
+
+trump_approval$percent <- trump_approval$weighted/sum(trump_approval$weighted)
+
+ggplot(data=turnout, aes(x=turnout, y=percent)) + geom_col(fill="red") + coord_flip() + scale_x_reverse()
+
+
+
+```
+
+```{r}
+ggplot()
+likert()
+
+horserace_gender <- survey %>% filter(!is.na(horserace)) %>% select(horserace, sex,weight) %>% group_by(horserace,sex) %>% summarize(weighted = sum(weight)) %>% data.frame()
+
+h_g_total <- horserace_gender %>% group_by(sex) %>% summarize(total = sum(weighted)) %>% data.frame()
+
+horserace_gender <- left_join(horserace_gender,h_g_total,by="sex")
+horserace_gender$percent <- (horserace_gender$weighted/horserace_gender$total)*100
+
+h_g_answer <- c(1,2,3,4,5)
+h_g_new_order <- c(1,5,2,4,3)
+h_g_text <- c("Democrat Donna Moss","Republican Jack Reese","Lean Democrat Donna Moss","Lean Republican Jack Reese","Undecided")
+h_g_label <- data.frame(h_g_answer,h_g_text,h_g_new_order)
+
+horserace_gender <- left_join(horserace_gender,h_g_label,by=c("horserace"="h_g_answer"))
+
+hg <- ggplot() + geom_col(data=horserace_gender,aes(x=sex,y=percent, fill=as.character(h_g_new_order)),position="stack") 
+hg <- hg + coord_flip()
+hg <- hg + labs(x="Gender",y="Percent",fill="")
+hg <- hg + scale_fill_manual(values=c("blue","light blue","light grey","pink"," red"),labels=c("Democrat Donna Moss","Lean Democrat Donna Moss","Undecided","Lean Republican Jack Reese","Republican Jack Reese"))
+hg <- hg + geom_text(data=horserace_gender,aes(x=sex,y=percent,label=round(percent,2)),position = position_stack(vjust = 0.5))
+hg <- hg + theme_minimal() + theme(legend.position="bottom")
+plot(hg)
+```
+
+```{r}
+ggplot(horserace_gender,aes(x=horserace, y=weighted,color=sex)) + geom_line()
+  
+library(pwr)
+
+pwr.2p.test(h=0.05,n=NULL,sig.level=0.1, power=0.70,alternative = "greater")
+
+1500/.15
+
+10000/7
+
+2700/.15
+
+18000/14
+
+(2609*3)/.15
+
+52180/21
+
+survey_pwr_calc <- survey
+
+survey_pwr_calc$msg_exp
+
+
+- More Minnesota voters disapprove of Trump than approve of him, but the split is close: **49.0% Strongly Disapprove or Somewhat Disapprove** and **46.5% Strongly Approve or Somewhat Approve**
+- The voters who approve of Trump feel more strongly
+
+- The **majority of Independents approve of Trump** (50.8%), and **the majority of Moderates disapprove of him** (53.2%).
+
+
+aca_race <- survey %>% group_by(repeal_ACA,race_all, horserace) %>% summarize(total = sum(weight)) %>% data.frame()
+
+aca_race_pct <- survey %>% group_by(race_all, horserace) %>% summarize(total = sum(weight)) %>% data.frame()
+
+aca_race_all <- left_join(aca_race,aca_race_pct,by=c("race_all","horserace"))
+
+aca_race_all$pct <- round((aca_race_all$total.x/aca_race_all$total.y)*100,1)
+
+aca_race_all <- subset(aca_race_all,race_all != "h_Middle_Eastern")
+
+ggplot(data=aca_race_all) + geom_raster(data=aca_race_all,aes(x=repeal_ACA,y=race_all, fill=pct)) + geom_text(aes(x=repeal_ACA,y=race_all, label=pct)) + scale_x_continuous(labels=c("Oppose","Favor"),breaks=c(1,2)) +  scale_fill_distiller(palette="Reds", direction=1)  + scale_y_discrete(labels=c("White","Black","Hispanic","Asian","Native American","Mixed","Other"),breaks=c("a_White","b_Black","c_Hispanic","d_Asian","e_Native_American","f_Mixed","g_Other")) + labs(x="ACA Repeal",y="Race",fill="% of Race") + theme_minimal() + theme(legend.key.size = unit(1.5,"cm"),legend.text = element_text(size=16),legend.title = element_text(size=16),axis.text.x = element_text(size=16),axis.text.y = element_text(size=16),axis.title=element_text(size=19, face="bold"),plot.title = element_text(size=20,face="bold",hjust=0.5)) + facet_wrap(facets=aca_race_all$horserace)
+```
+
+
+
+
+```{r, echo=FALSE, cache=TRUE}
+
+
+#Controlling for the available demographic variables, the greatest predictor of a Jack Reese vote is listing race as "Other," followed by being male.  The greatest predictor of a Donna Moss vote is a post-grad education level, followed by a 4-year college education level.
+h <- svyglm(horserace_recoded ~ sex + education + race_all, design=followup)
+       
+svyglm(horserace_recoded ~ sex + education + race_all, design=followup,subset=horserace_recoded %in% c(2,3,4))
+
+
+svymultinom(horserace_recoded ~ sex + education + race_all,design=followup,scale.weights = FALSE)
+
+survey2 <- survey
+survey2$und <- 0
+survey2[survey2$horserace_recoded==3,]$und <- 1
+survey2$race_all.f <- factor(survey2$race_all)
+survey2$education.f <- factor(survey2$education)
+survey2$sex.f <- factor(survey2$sex)
+survey2$sex.f <- factor(survey2$sex)
+
+followup2 <- svydesign(ids = ~0,
+                      data = survey2,
+                      weights = ~weight)
+    
+g <-svyglm(und ~ factor(sex) + factor(education) + factor(race_all) + factor(ideo),design=followup2,family=binomial,subset= race_all != "h_Middle_Eastern" )
+
+summary(g)
+summ(h)
+
+install.packages("jtools")
+library(jtools)
+effect_plot(g,pred=race_all, interval=TRUE,plot.points=TRUE)
+
+effect_plot(g,pred=education, interval=TRUE,plot.points=TRUE)
+
+turnout_sums <- survey %>% group_by(turnout) %>% summarize(n=sum(weight)) %>% data.frame()
+turnout_horserace_sums <- survey %>% group_by(turnout,horserace_recoded) %>% summarize(k=sum(weight)) %>% data.frame()
+horserace_by_turnout_stats <- left_join(turnout_horserace_sums,turnout_sums,by="turnout")
+horserace_by_turnout_stats$prop <- horserace_by_turnout_stats$k/horserace_by_turnout_stats$n
+horserace_by_turnout_stats$se <- sqrt(horserace_by_turnout_stats$prop*(1-horserace_by_turnout_stats$prop)/horserace_by_turnout_stats$n)
+
+candidate_summ <- svytotal(x=~horserace,design=followup)
+candidate_summ <- as.data.frame(candidate_summ)
+candidate_se <- candidate_summ$SE
+candidate_moe <- 1.96*candidate_se
+
+q <- svytotal(x=~horserace_recoded,design=followup)
+
+svymean(x=~pid,design=followup)
+
+function
+
+svyratio(~turnout,~horserace_recoded,design=followup)
+
+horserace_by_turnout_stats$moe <- (qnorm(.975)*horserace_by_turnout_stats$se)*horserace_by_turnout_stats$n
+
+
+
+
+
+overall <- survey %>% group_by(horserace_recoded) %>% summarize(total=n()) %>% data.frame()
+
+overall$cand <- "Donna Moss"
+overall[overall$horserace_recoded==3,]$cand <- "Undecided"
+overall[overall$horserace_recoded %in% c(4,5),]$cand <- "Jack Reese"
+
+
+overall$hr <- overall$horserace_recoded
+overall[overall$horserace_recoded==2,]$hr <- 0
+
+ggplot(data=overall) + geom_col(aes(x=cand,y=total,fill=as.character(hr))) + scale_fill_manual(labels=c("1"="Donna Moss","0"="Lean Donna Moss","3"="Undecided","4"="Lean Jack Reese","5"="Jack Reese"),values=c("light blue","blue","light grey","pink"," red"))
+
+is.factor(survey2$race_all.f)
+```
+
+```{r,results='asis'}
+install.packages("ggstance")
+library(ggstance)
+install.packages("huxtable")
+library(huxtable)
+
+summary(g)
+export_summs(g,h)
+
+g <-svyglm(und ~ factor(sex) + factor(education) + factor(race_all),design=followup,subset= race_all != "h_Middle_Eastern" )
+
+
+h <-svyglm(und ~ factor(sex) + factor(education) + factor(race_all) + factor(ideo),design=followup,subset= race_all != "h_Middle_Eastern" )
+
+i <-svyglm(und ~ factor(turnout)*factor(race_all),design=followup2,family=binomial,subset= race_all != "h_Middle_Eastern" )
+
+stargazer(g,h,type="html", single.row=TRUE, align=TRUE)
+
+plot_coefs(g)
+
+
+```
+
+
+```{r}
+
+r_ed <- svytable(~sex + education + horserace_recoded ,design=followup)
+r_ed <- as.data.frame(gen_ed)
+
+edu_sex <- svytable(~education + sex,design=followup)
+edu_sex <- as.data.frame(edu_sex)
+
+race_ed_graph <- left_join(gen_ed, edu_sex,by=c("education","sex"))
+gender_ed_graph$prop <- gender_ed_graph$Freq.x/gender_ed_graph$Freq.y
+gender_ed_graph$pct <- paste(round((gender_ed_graph$prop)*100,1),"%",sep='')
+colnames(gender_ed_graph) <- c("sex","education","hr","resp","total_ed","prop","pct")
+
+race_ed_plot <- ggplot(data=gender_ed_graph,aes(x=as.character(education),y=as.character(hr), fill=resp, label=round(resp))) + geom_raster() + facet_wrap(facets=gender_ed_graph$sex) + scale_x_discrete(labels=c("No HS","HS Grad","Some College","2-Yr College","4-Yr College","Post-Grad")) + scale_y_discrete(labels=c("1" = "Donna", "2" = "Lean Donna","3" = "Undecided","4"="Lean Jack","5"="Jack")) + scale_fill_distiller(palette="Oranges", direction=1) + labs(subtitle="n=1065",x="Education", y="Vote Intent",fill="Respondents") + theme_minimal() + theme(legend.key.size = unit(1.5,"cm"),legend.text = element_text(size=16),legend.title = element_text(size=18),axis.text = element_text(size=18),axis.title=element_text(size=18, face="bold"),strip.text = element_text(size=18,face="bold"),plot.subtitle = element_text(size=18,hjust=0.5)) + coord_flip()
+
+
+rsconnect::setAccountInfo(name='carafeldkamp',
+			  token='F132A74CB1BAC6283F3C3D90CF2329C0',
+			  secret='wMsRLRISkgMyr0dFwBTrVVlW40sfVbE6iwIlMidV')
+
+
+#Converting logits to predicted probabilities
+
+#survey.sub <- subset(survey,race_all != "h_Middle_Eastern" )
+
+#race_all.lev <- levels(survey.sub$race_all)[1:7]
+#education.lev <- levels(survey.sub$education)
+#sex.lev <- levels(survey.sub$sex)
+#ideo.lev <- levels(factor(survey.sub$ideo))
+
+
+
+#combos <- expand.grid(race_all.lev,education.lev,sex.lev,ideo.lev,stringsAsFactors = TRUE)
+#colnames(combos) <- c("race_all","education","sex", "ideo")
+
+
+survey.sub <- subset(survey,race_all != "h_Middle_Eastern" )
+newdata <- survey.sub %>% select(id,sex,race_all, education, ideo, und) %>% data.frame()
+
+pp_g <- predict(g, newdata=newdata,type="response")
+pp_h <- predict(h, newdata=newdata,type="response")
+
+newdata$pp_g <- pp_g
+newdata$pp_h <- pp_h
+ 
+#combos
+#pp_g <- predict(g, combos,type="response")
+#pp_h <- predict(h, combos,type="response")
+#combos$pp_g <- pp_g
+#combos$pp_h <- pp_h 
+
+#pp_plot1 <- ggplot(data=combos, aes(x=race_all, y=education, fill=as.numeric(pp_g), label=round(as.numeric(pp_h),2))) + geom_raster() + facet_grid(cols=vars(ideo),rows=vars(sex)) + scale_fill_distiller(palette="PuRd", direction=1)+ theme_classic() + geom_text(size=10,color="white") + theme_minimal() + theme(legend.key.size = unit(1.5,"cm"),legend.text = element_text(size=16),legend.title = element_text(size=18),axis.text = element_text(size=18),axis.title=element_text(size=18, face="bold"),strip.text = element_text(size=18,face="bold"),plot.subtitle = element_text(size=18,hjust=0.5))
+
+#plot(pp_plot1)
+
+#pp_plot2 <- ggplot(data=combos, aes(x=race_all, y=education, fill=as.numeric(pp_h))) + geom_raster() + facet_wrap(facets=vars(sex))+ scale_fill_distiller(palette="PuRd", direction=1)+ theme_classic()
+#plot(pp_plot2)
+
+#pp_plot3 <- ggplot(data=combos, aes(x=race_all, y=education, fill=as.numeric(und))) + geom_raster() + facet_wrap(facets=vars(sex)) + theme_classic() + scale_fill_distiller(palette="PuRd", direction=1)
+#plot(pp_plot3) 
+
+
+#aca_hr <- survey %>% group_by(repeal_ACA,horserace_recoded) %>% summarize(total = sum(weight)) %>% data.frame()
+
+#aca_donna <- ggplot(data=aca_hr) + geom_area(data=aca_hr,aes(x=repeal_ACA,y=total, fill=as.character(horserace_recoded)),color="white") + scale_x_continuous(labels=c("Oppose","Favor"),breaks=c(1,2)) +  scale_fill_manual(labels=c("Donna Moss", "Lean Donna Moss", "Undecided","Lean Jack Reese","Jack Reese"), values=c("dodgerblue3","light blue","light grey","pink","firebrick2")) + labs(x="ACA Repeal",y="Respondents",fill="Intended Vote Choice") + theme_minimal() + theme(legend.key.size = unit(1.5,"cm"),legend.text = element_text(size=16),legend.title = element_text(size=16),axis.text.x = element_text(size=16),axis.text.y = element_text(size=16),axis.title=element_text(size=19, face="bold"),plot.title = element_text(size=20,face="bold",hjust=0.5))
+
+#plot(aca_donna)
